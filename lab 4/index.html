@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Моя перша HTM-форма</title>
+
+</head>
+<body>
+    <h1>Моя перша HTM-форма</h1>
+        <form action="https://httpbin.org/post" method="post">
+            <label>Ім'я: <input type="text" name="firstname"></label><br> 
+            <br>Дата народження:<input type="date" name="date_field"><br>
+            <br> Імейл: <input type="email" name="email_faild"><br>
+            <br> Повідомлення: <textarea id="user_message" name="message_faild"></textarea><br>
+            <br><button type="submit" >Надіслати</button>
+            <button type="reset">Очистити</button>
+        </form>
+        <p>Ваші улюблені напої?</p>
+        <input type="checkbox" name="tea" value="yes">Чай<br>
+        <input type="checkbox" name="water" value="yes">Вода<br>
+        <input type="checkbox" name="coffee" value="yes">Кава<br>
+        <input type="checkbox" name="juse" value="yes">Сок<br>
+        <p>Ваша національність?</p>
+        <label><input type="radio" name="Nation" value="UA">Українець</label><br>
+        <label><input type="radio" name="Nation" value="G">Німець</label><br>
+        <label><input type="radio" name="Nation" value="US">Американець</label><br>
+        <br><picture>
+            <source
+                media="(max-width:467px)"
+                scrcet="https://picsum.photos/300/500"
+                alt="зображення">
+            <source 
+                media="(min-width:468px)"
+                scrcet="https://picsum.photos/1000/400"
+                alt="зображення">
+                <img src="https://picsum.photos/1000/400"
+                alt="звичайне зображення">
+                
+        </picture>
+
+
+    
+</body>
+</html>
