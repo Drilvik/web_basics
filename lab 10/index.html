@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weathry - Premium Smart Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root {
+            --accent: #3db8ff;
+            --glass: rgba(255, 255, 255, 0.06);
+            --glass-border: rgba(255, 255, 255, 0.15);
+            --c-sun: #ffb800; --c-rain: #3db8ff; --c-white: #ffffff; --c-bolt: #ffcc00; --c-moon: #f8fafc;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { background: #050608; color: #fff; height: 100vh; overflow: hidden; display: flex; }
+
+        #dynamic-bg { 
+            position: fixed; inset: 0; z-index: -3; 
+            background-size: cover; background-position: center; 
+            transition: background-image 1.2s ease-in-out;
+            filter: brightness(0.6) blur(10px);
+            transform: scale(1.05);
+        }
+        .bg-overlay { position: fixed; inset: 0; z-index: -2; background: linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.8)); }
+
+        #loader {
+            position: fixed; inset: 0; z-index: 10000;
+            background: url('https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=1920') center/cover;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; transition: 1s;
+        }
+        #loader::before { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(45px); }
+        .loader-content { position: relative; z-index: 1; text-align: center; }
+        .sun-load { font-size: 55px; color: var(--c-sun); animation: spin 5s linear infinite; filter: drop-shadow(0 0 20px var(--c-sun)); margin-bottom: 40px; }
+        .prog-w { width: 180px; height: 2px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; }
+        .prog-f { width: 0%; height: 100%; background: #fff; animation: fill 2s forwards; }
+        @keyframes fill { 100% { width: 100% } } @keyframes spin { 100% { transform: rotate(360deg) } }
+
+        /* --- САЙДБАР --- */
+        aside { width: 85px; background: rgba(0,0,0,0.5); border-right: var(--glass-border); display: flex; flex-direction: column; align-items: center; padding: 40px 0; z-index: 100; }
+        .side-logo { width: 45px; height: 45px; margin-bottom: 50px; display: flex; align-items: center; justify-content: center; }
+        .nav-link { font-size: 20px; color: rgba(255,255,255,0.3); margin-bottom: 35px; cursor: pointer; transition: 0.3s; }
+        .nav-link:hover, .nav-link.active { color: #fff; text-shadow: 0 0 15px var(--accent); transform: scale(1.15); }
+        .nav-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 25px; align-items: center; }
+
+        /* --- МАКЕТ --- */
+        main { flex: 1; display: grid; grid-template-columns: 380px 1fr; padding: 25px; gap: 25px; }
+        .panel { background: var(--glass); backdrop-filter: blur(50px); border: var(--glass-border); border-radius: 40px; padding: 30px; transition: 0.4s ease; }
+        .panel:hover { transform: translateY(-5px) scale(1.02); background: rgba(255,255,255,0.1); }
+
+        .search-container { position: relative; margin-bottom: 30px; }
+        .search-container input { width: 100%; background: rgba(0,0,0,0.4); border: var(--glass-border); padding: 15px 45px; border-radius: 20px; color: #fff; outline: none; }
+        .search-results { position: absolute; top: 110%; left: 0; width: 100%; background: #121418; border-radius: 18px; border: var(--glass-border); z-index: 1000; display: none; overflow: hidden; }
+        .search-item { padding: 14px 20px; cursor: pointer; font-size: 14px; transition: 0.2s; }
+        .search-item:hover { background: var(--accent); color: #000; font-weight: 700; }
+
+        .left-panel { display: flex; flex-direction: column; height: calc(100vh - 50px); overflow: hidden; }
+        .weather-scroll { flex: 1; overflow-y: auto; padding-right: 5px; scrollbar-width: none; }
+        .weather-scroll::-webkit-scrollbar { display: none; }
+        .big-t { font-size: 88px; font-weight: 200; line-height: 1; margin: 20px 0; }
+        
+        .f-item { display: flex; align-items: center; padding: 16px 12px; border-radius: 20px; transition: 0.3s ease; }
+        .f-item:hover { background: rgba(255,255,255,0.15); transform: scale(1.06); }
+        .f-item .day-name { width: 125px; font-weight: 500; font-size: 14px; }
+        .f-item .icon-box { width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; }
+        .f-item .icon-box svg { width: 30px; height: 30px; }
+        .f-item .temp-range { flex: 1; text-align: right; font-weight: 700; font-size: 14px; }
+
+        /* ГРАФІКИ */
+        .right-panel { display: flex; flex-direction: column; gap: 25px; }
+        .grid-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .stat-label { color: rgba(255,255,255,0.5); font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 20px; text-align: center; }
+
+        .uv-box { position: relative; width: 120px; height: 75px; margin: 0 auto; display: flex; justify-content: center; }
+        .uv-fill { fill: none; stroke: var(--accent); stroke-width: 7; stroke-linecap: round; stroke-dasharray: 126; stroke-dashoffset: 126; transition: 1.5s; }
+        .uv-num { position: absolute; bottom: -5px; font-size: 26px; font-weight: 700; }
+
+        .sun-path { height: 2px; background: rgba(255,255,255,0.1); width: 100%; position: relative; margin-top: 55px; }
+        .sun-node { position: absolute; width: 14px; height: 14px; background: var(--c-sun); border-radius: 50%; box-shadow: 0 0 15px var(--c-sun); top: -6px; transition: 1s ease; }
+        .m-svg { position: absolute; right: 0; top: -35px; width: 28px; filter: drop-shadow(0 0 10px #fff); }
+        .s-svg { position: absolute; left: 0; top: -35px; width: 28px; }
+
+        #map { flex: 1; border-radius: 40px; border: var(--glass-border); z-index: 1; min-height: 250px; }
+
+        /* МОДАЛКИ */
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 2000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(15px); }
+        .modal-card { background: #111318; padding: 45px; border-radius: 40px; border: 1px solid var(--accent); width: 420px; text-align: center; }
+        #settings-side { position: fixed; right: -400px; top: 0; bottom: 0; width: 360px; background: #0a0b0f; border-left: var(--glass-border); padding: 40px; z-index: 2000; transition: 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+        #settings-side.open { right: 0; }
+        .btn-p { width: 100%; padding: 15px; background: var(--accent); color: #000; border-radius: 15px; font-weight: 700; border: none; cursor: pointer; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="dynamic-bg"></div>
+    <div class="bg-overlay"></div>
+    <div id="loader"><div class="loader-content"><div class="sun-load"><i class="fas fa-sun"></i></div><div class="prog-w"><div class="prog-f"></div></div></div></div>
+
+    <div id="auth-modal" class="modal">
+        <div class="modal-card">
+            <h2 id="auth-title">Реєстрація</h2>
+            <p style="color: #666; margin-bottom: 25px;">Створіть свій акаунт у Weathry</p>
+            <input type="text" placeholder="Ім'я" style="width:100%; padding:14px; background:#000; border:1px solid #333; color:#fff; border-radius:12px; margin-bottom:15px;"><input type="email" placeholder="Email" style="width:100%; padding:14px; background:#000; border:1px solid #333; color:#fff; border-radius:12px; margin-bottom:15px;"><input type="password" placeholder="Пароль" style="width:100%; padding:14px; background:#000; border:1px solid #333; color:#fff; border-radius:12px; margin-bottom:15px;">
+            <button class="btn-p" onclick="closeM('auth-modal')">Продовжити</button>
+            <p onclick="closeM('auth-modal')" style="margin-top: 25px; cursor: pointer; color: #444;">Закрити</p>
+        </div>
+    </div>
+
+    <div id="settings-side">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px;"><h3>Налаштування</h3><i class="fas fa-times" onclick="toggleSettings()" style="cursor: pointer;"></i></div>
+        <button class="btn-p" onclick="toggleUnits()">Перемкнути на °F / °C</button>
+        <button class="btn-p" style="background: #222; color: #fff; margin-top: 20px;" onclick="alert('Функція вибору фото...')">Змінити Аватар</button>
+    </div>
+
+    <aside>
+        <div class="side-logo" id="side-icon"></div>
+        <div class="nav-link active"><i class="fas fa-house-chimney"></i></div>
+        <div class="nav-link"><i class="fas fa-map-location-dot"></i></div>
+        <div class="nav-link"><i class="fas fa-calendar-alt"></i></div>
+        <div class="nav-bottom">
+            <i class="fas fa-user-circle nav-link" onclick="openM('auth-modal')" style="margin:0"></i>
+            <i class="fas fa-cog nav-link" onclick="toggleSettings()" style="margin:0"></i>
+        </div>
+    </aside>
+
+    <main>
+        <div class="panel left-panel">
+            <div class="search-container">
+                <i class="fas fa-search" style="position:absolute; left:18px; top:18px; color:rgba(255,255,255,0.4);"></i>
+                <input type="text" id="cityInput" placeholder="Оберіть місто..." onfocus="showR()" onblur="setTimeout(hideR, 200)">
+                <div class="search-results" id="searchRecs">
+                    <div class="search-item" onclick="changeCity('Ужгород')">Ужгород, Україна</div>
+                    <div class="search-item" onclick="changeCity('Терново')">Терново, Україна</div>
+                    <div class="search-item" onclick="changeCity('Київ')">Київ, Україна</div>
+                    <div class="search-item" onclick="changeCity('Плзень')">Плзень, Чехія</div>
+                </div>
+            </div>
+            <div class="weather-scroll">
+                <div id="mainView">
+                    <div id="mainIcon" style="width:80px; height:80px; margin-bottom:15px;"></div>
+                    <div class="big-t" id="currTemp"></div>
+                    <h2 id="currCity"></h2>
+                    <p id="currCond" style="color:rgba(255,255,255,0.5); font-weight:500;"></p>
+                </div>
+                <div style="margin-top:40px; border-top:1px solid rgba(255,255,255,0.1); padding-top:25px;">
+                    <h4 style="margin-bottom:20px;">Прогноз на 7 днів</h4>
+                    <div id="f-list"></div>
+                </div>
+            </div>
+        </div>
+        <div class="right-panel">
+            <div class="grid-stats">
+                <div class="panel"><div class="stat-label">Швидкість вітру</div><div id="windVal" style="font-size:28px; font-weight:700; text-align: center;"></div><div style="height: 60px; display: flex; align-items: center; justify-content: center;"><svg viewBox="0 0 100 30" width="100%"><path d="M0 20 Q 25 5, 50 20 T 100 20" fill="none" stroke="var(--accent)" stroke-width="3"/></svg></div></div>
+                <div class="panel"><div class="stat-label">УФ Індекс</div><div class="uv-box"><svg width="100" height="60" viewBox="0 0 100 60"><path d="M10 50 A 40 40 0 0 1 90 50" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="7"/><path id="uvArc" class="uv-fill" d="M10 50 A 40 40 0 0 1 90 50" /></svg><div id="uvVal" class="uv-num"></div></div></div>
+                <div class="panel"><div class="stat-label">Схід та Захід Сонця</div><div class="sun-path" id="sunTimeline"></div><p id="sunCount" style="margin-top:30px; font-size:11px; color:var(--accent); font-weight:600; text-align: center;"></p></div>
+            </div>
+            <div id="map"></div>
+        </div>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let isF = false; let map;
+        const SVG = {
+            sun: `<svg viewBox="0 0 24 24" fill="none" stroke="#ffb800" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>`,
+            cloud: `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M18 10h-1.3A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`,
+            rain: `<svg viewBox="0 0 24 24" fill="none" stroke="#3db8ff" stroke-width="1.8" stroke-linecap="round"><path d="M16 13a4 4 0 0 1-8 0"/><path d="M8 19l.5 2M12 21l.5 2M16 19l.5 2M18 10h-1.3A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`,
+            bolt: `<svg viewBox="0 0 24 24" fill="none" stroke="#ffcc00" stroke-width="1.8" stroke-linecap="round"><path d="M13 2 L3 14 L12 14 L11 22 L21 10 L12 10 L13 2 Z"/></svg>`,
+            rising: `<svg viewBox="0 0 24 24" fill="#ffb800"><path d="M12 2v4M5 12H2M22 12h-3M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1M18.4 18.4l-2.1-2.1M7.7 7.7L5.6 5.6M16 12a4 4 0 11-8 0 4 4 0 018 0zM2 20h20" stroke="#ffb800" stroke-width="1"/></svg>`,
+            moon: `<svg viewBox="0 0 24 24" fill="#f8fafc"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`
+        };
+
+        const cities = {
+            'Ужгород': { 
+                temp: 4, uv: 0.8, wind: 6.5, s: 8.05, e: 16.63, lat: 48.62, lon: 22.28, 
+                bg: 'https://images.unsplash.com/photo-1516912481808-3406841bd33c?q=80&w=1920', icon: 'cloud', cond: 'Переважно хмарно',
+                f: [{d:'Понеділок',i:'rain',min:2,max:4},{d:'Вівторок',i:'cloud',min:2,max:5},{d:'Середа',i:'cloud',min:1,max:4},{d:'Четвер',i:'rain',min:1,max:3},{d:'П\'ятниця',i:'cloud',min:0,max:3},{d:'Субота',i:'cloud',min:-1,max:2},{d:'Неділя',i:'sun',min:-2,max:2}]
+            },
+            'Київ': { 
+                temp: 1, uv: 0.5, wind: 15.2, s: 7.95, e: 15.9, lat: 50.45, lon: 30.52, 
+                bg: 'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?q=80&w=1920', icon: 'rain', cond: 'Мокрий сніг',
+                f: [{d:'Понеділок',i:'cloud',min:-1,max:1},{d:'Вівторок',i:'cloud',min:-2,max:0},{d:'Середа',i:'rain',min:0,max:2},{d:'Четвер',i:'cloud',min:-3,max:-1},{d:'П\'ятниця',i:'cloud',min:-4,max:-1},{d:'Субота',i:'cloud',min:-5,max:-2},{d:'Неділя',i:'sun',min:-3,max:0}]
+            },
+            'Терново': { 
+                temp: 2, uv: 0.6, wind: 5.1, s: 8.02, e: 16.6, lat: 48.06, lon: 23.73, 
+                bg: 'https://images.unsplash.com/photo-1485236715568-ddc5ee6ca227?q=80&w=1920', icon: 'cloud', cond: 'Туманно',
+                f: [{d:'Понеділок',i:'cloud',min:1,max:3},{d:'Вівторок',i:'cloud',min:0,max:4},{d:'Середа',i:'cloud',min:-1,max:2},{d:'Четвер',i:'rain',min:0,max:3},{d:'П\'ятниця',i:'cloud',min:-2,max:1},{d:'Субота',i:'cloud',min:-3,max:0},{d:'Неділя',i:'cloud',min:-1,max:2}]
+            },
+            'Плзень': { 
+                temp: 3, uv: 1.0, wind: 9.4, s: 8.05, e: 16.08, lat: 49.74, lon: 13.37, 
+                bg: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=1920', icon: 'sun', cond: 'Ясно',
+                f: [{d:'Понеділок',i:'sun',min:1,max:6},{d:'Вівторок',i:'sun',min:0,max:5},{d:'Середа',i:'cloud',min:1,max:4},{d:'Четвер',i:'rain',min:2,max:5},{d:'П\'ятниця',i:'sun',min:1,max:6},{d:'Субота',i:'sun',min:-1,max:4},{d:'Неділя',i:'sun',min:0,max:5}]
+            }
+        };
+
+        window.onload = () => { setTimeout(() => { document.getElementById('loader').style.opacity = '0'; setTimeout(()=>document.getElementById('loader').style.display='none', 800); }, 2500); initMap(); changeCity('Ужгород'); setInterval(updateClock, 60000); };
+        function initMap() { map = L.map('map', { zoomControl: false }).setView([48.62, 22.28], 11); L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map); }
+        function format(c) { return isF ? Math.round((c*9/5)+32)+"°F" : c+"°C"; }
+        function toggleUnits() { isF = !isF; changeCity(document.getElementById('currCity').innerText.split(',')[0]); }
+
+        function changeCity(name) {
+            const d = cities[name];
+            document.getElementById('currCity').innerText = name + (name === 'Плзень' ? ', CZ' : ', UA');
+            document.getElementById('currTemp').innerText = format(d.temp);
+            document.getElementById('windVal').innerHTML = d.wind.toFixed(1) + " <small>км/год</small>";
+            document.getElementById('uvVal').innerText = d.uv.toFixed(1);
+            document.getElementById('uvArc').style.strokeDashoffset = 126 - ((d.uv / 12) * 126);
+            
+            // ГАРАНТОВАНА ЗМІНА ФОНУ (ПЕЙЗАЖ)
+            document.getElementById('dynamic-bg').style.backgroundImage = "url('" + d.bg + "')";
+            
+            document.getElementById('currCond').innerText = d.cond;
+            document.getElementById('mainIcon').innerHTML = SVG[d.icon];
+            document.getElementById('side-icon').innerHTML = SVG[d.icon];
+            map.flyTo([d.lat, d.lon], 12);
+            document.getElementById('f-list').innerHTML = d.f.map(item => `<div class="f-item"><span class="day-name">${item.d}</span><div class="icon-box">${SVG[item.i]}</div><span class="temp-range">${format(item.min)} / ${format(item.max)}</span></div>`).join('');
+            updateSun(d.s, d.e);
+        }
+
+        function updateSun(s, e) {
+            const now = new Date(); const h = now.getHours() + now.getMinutes()/60;
+            let p = Math.max(0, Math.min(100, ((h - s) / (e - s)) * 100));
+            document.getElementById('sunTimeline').innerHTML = `<div class="s-svg">${SVG.rising}</div><div class="sun-node" style="left:${p}%"></div><div class="m-svg">${SVG.moon}</div>`;
+            document.getElementById('sunCount').innerText = h > e ? "Сонце вже зайшло" : `До заходу: ${Math.floor(e-h)}г ${Math.round((e-h)%1*60)}хв`;
+        }
+
+        function updateClock() { const name = document.getElementById('currCity').innerText.split(',')[0]; if(cities[name]) updateSun(cities[name].s, cities[name].e); }
+        function showR() { document.getElementById('searchRecs').style.display = 'block'; }
+        function hideR() { document.getElementById('searchRecs').style.display = 'none'; }
+        function toggleSettings() { document.getElementById('settings-side').classList.toggle('open'); }
+        function openM(id) { document.getElementById(id).style.display = 'flex'; }
+        function closeM(id) { document.getElementById(id).style.display = 'none'; }
+    </script>
+</body>
+</html>
